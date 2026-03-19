@@ -3,12 +3,15 @@ const classificationFlow = require('../src/flows/classificationFlow');
 const newAppointmentFlow = require('../src/flows/newAppointmentFlow');
 
 module.exports = async function handler(req, res) {
-  // Proteger con token secreto
-  const token = req.headers['x-cron-secret'] || req.query.secret;
-  if (token !== process.env.CRON_SECRET) {
+  // Vercel Cron envía Authorization: Bearer <CRON_SECRET>
+  const authHeader = req.headers['authorization'];
+  const expected = `Bearer ${process.env.CRON_SECRET}`;
+
+  if (authHeader !== expected) {
     return res.status(401).json({ error: 'No autorizado' });
   }
 
+  const dryRun = process.env.DRY_RUN === 'true';
   const inicio = Date.now();
   const resultados = { reminder: null, classification: null, newAppointment: null };
 
@@ -40,6 +43,7 @@ module.exports = async function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
+    dryRun,
     duracion: `${duracion}s`,
     timestamp: new Date().toISOString(),
     resultados,

@@ -69,6 +69,11 @@ async function obtenerInvitados(eventUri) {
  * @param {string} reason - Motivo de cancelación
  */
 async function cancelarEvento(citaId, reason = '') {
+  if (config.dryRun) {
+    console.log(`[Calendly][DRY_RUN] Cancelar evento ${citaId} - Razón: ${reason || 'N/A'}`);
+    return true;
+  }
+
   const body = reason ? JSON.stringify({ reason }) : '{}';
   const res = await fetch(
     `https://api.calendly.com/scheduled_events/${citaId}/cancellation`,

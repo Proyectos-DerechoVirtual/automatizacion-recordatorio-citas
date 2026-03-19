@@ -1,6 +1,6 @@
 const calendly = require('../services/calendly');
 const supabase = require('../services/supabase');
-const ultramsg = require('../services/ultramsg');
+const whatsapp = require('../services/whatsapp');
 const {
   extraerPrimerNombre,
   calcularFechaFinalCita,
@@ -81,7 +81,7 @@ async function ejecutar() {
         `[NewAppointmentFlow] Nueva cita: ${primerNombre} - ${evento.name} - ${horaCitaCorta}`
       );
 
-      await ultramsg.enviarMensaje(
+      await whatsapp.enviarMensaje(
         config.admin.groupAgendadas,
         msgCitaAgendadaAdmin(
           primerNombre,

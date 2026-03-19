@@ -1,6 +1,6 @@
 const calendly = require('../services/calendly');
 const supabase = require('../services/supabase');
-const ultramsg = require('../services/ultramsg');
+const whatsapp = require('../services/whatsapp');
 const {
   extraerPrimerNombre,
   calcularFechaFinalCita,
@@ -217,7 +217,7 @@ async function ejecutar() {
         console.log(
           `[ReminderFlow] Enviando ${recordatorio.tipo} a ${cita.primer_nombre} (${cita.whatsapp})`
         );
-        await ultramsg.enviarMensaje(cita.whatsapp, recordatorio.plantilla);
+        await whatsapp.enviarMensaje(cita.whatsapp, recordatorio.plantilla);
 
         // Actualizar tipo de recordatorio en Supabase
         await supabase.upsertCita({
@@ -250,13 +250,13 @@ async function ejecutar() {
 
       // Notificar admin
       const horaCitaCorta = cita.hora_cita ? cita.hora_cita.slice(0, 5) : '';
-      await ultramsg.enviarMensaje(
+      await whatsapp.enviarMensaje(
         config.admin.group,
         msgAutocanceladoAdmin(cita.primer_nombre, horaCitaCorta)
       );
 
       // Notificar usuario
-      await ultramsg.enviarMensaje(
+      await whatsapp.enviarMensaje(
         cita.whatsapp,
         msgAutocanceladoUsuario(horaCitaCorta)
       );

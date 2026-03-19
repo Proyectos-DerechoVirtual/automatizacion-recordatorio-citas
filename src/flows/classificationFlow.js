@@ -1,5 +1,5 @@
 const supabase = require('../services/supabase');
-const ultramsg = require('../services/ultramsg');
+const whatsapp = require('../services/whatsapp');
 const calendly = require('../services/calendly');
 const gemini = require('../services/gemini');
 const { obtenerNumeroWhatsApp } = require('../utils/whatsapp');
@@ -85,8 +85,8 @@ async function ejecutar() {
     for (const cita of citas) {
       if (!cita.whatsapp) continue;
 
-      const chatId = `${cita.whatsapp}@c.us`;
-      const conversaciones = await ultramsg.obtenerChat(chatId, 2);
+      const chatId = `${cita.whatsapp}@s.whatsapp.net`;
+      const conversaciones = await whatsapp.obtenerChat(chatId, 2);
 
       if (!Array.isArray(conversaciones) || conversaciones.length === 0) continue;
 
@@ -142,7 +142,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
   switch (clasificacion) {
     case 'confirmado':
       // Notificar admin
-      await ultramsg.enviarMensaje(
+      await whatsapp.enviarMensaje(
         adminGroup,
         msgConfirmacionAdmin(
           cita.primer_nombre,
@@ -153,7 +153,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
         )
       );
       // Confirmar al cliente
-      await ultramsg.enviarMensaje(cita.whatsapp, respuesta_agente);
+      await whatsapp.enviarMensaje(cita.whatsapp, respuesta_agente);
       // Actualizar Supabase
       await supabase.actualizarCita(cita.citaId, { respuesta_usuario: 'confirmado' });
       break;
@@ -162,7 +162,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
       // Cancelar en Calendly
       await calendly.cancelarEvento(cita.citaId);
       // Notificar admin
-      await ultramsg.enviarMensaje(
+      await whatsapp.enviarMensaje(
         adminGroup,
         msgCancelacionAdmin(
           cita.primer_nombre,
@@ -173,7 +173,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
         )
       );
       // Notificar cliente
-      await ultramsg.enviarMensaje(
+      await whatsapp.enviarMensaje(
         cita.whatsapp,
         msgCancelacionCliente(cita.primer_nombre, enlaceCalendly)
       );
@@ -192,12 +192,12 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
         'Reprogramación solicitada via WhatsApp'
       );
       // Enviar link para reprogramar al cliente
-      await ultramsg.enviarMensaje(
+      await whatsapp.enviarMensaje(
         cita.whatsapp,
         msgReprogramarCliente(cita.primer_nombre, enlaceCalendly)
       );
       // Notificar admin
-      await ultramsg.enviarMensaje(
+      await whatsapp.enviarMensaje(
         adminGroup,
         msgReprogramarAdmin(
           cita.primer_nombre,
@@ -217,9 +217,9 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
 
     case 'cuestionamiento':
       // Enviar mensaje de espera al usuario
-      await ultramsg.enviarMensaje(cita.whatsapp, respuesta_agente);
+      await whatsapp.enviarMensaje(cita.whatsapp, respuesta_agente);
       // Notificar admin
-      await ultramsg.enviarMensaje(
+      await whatsapp.enviarMensaje(
         adminGroup,
         msgPreguntaAdmin(cita.primer_nombre, cita.whatsapp, cita.producto)
       );
@@ -230,7 +230,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
     case 'discutido':
     default:
       // Respuesta no clara -> enviar respuesta del agente
-      await ultramsg.enviarMensaje(cita.whatsapp, respuesta_agente);
+      await whatsapp.enviarMensaje(cita.whatsapp, respuesta_agente);
       // Actualizar Supabase
       await supabase.actualizarCita(cita.citaId, { respuesta_usuario: 'discutido' });
       break;

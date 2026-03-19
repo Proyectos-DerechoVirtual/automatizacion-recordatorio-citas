@@ -1,10 +1,9 @@
 require('dotenv').config();
 
 const config = {
-  ultramsg: {
-    token: process.env.ULTRAMSG_TOKEN,
-    instance: process.env.ULTRAMSG_INSTANCE,
-    baseUrl: `https://api.ultramsg.com/${process.env.ULTRAMSG_INSTANCE}`,
+  baileys: {
+    url: process.env.BAILEYS_URL,
+    secret: process.env.BAILEYS_SECRET,
   },
   calendly: {
     token: process.env.CALENDLY_TOKEN,
@@ -28,6 +27,7 @@ const config = {
     groupAgendadas: process.env.ADMIN_GROUP_AGENDADAS,
     agentNumber: process.env.AGENT_NUMBER,
   },
+  dryRun: process.env.DRY_RUN === 'true',
 };
 
 module.exports = config;

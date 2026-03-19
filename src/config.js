@@ -9,9 +9,11 @@ const config = {
     token: process.env.CALENDLY_TOKEN,
     org: process.env.CALENDLY_ORG,
     users: [
-      process.env.CALENDLY_USER_1,
-      process.env.CALENDLY_USER_2,
-      process.env.CALENDLY_USER_3,
+      process.env.CALENDLY_DERECHO_VIRTUAL_1,
+      process.env.CALENDLY_DERECHO_VIRTUAL_2,
+      process.env.CALENDLY_LUCIA_VERGARA,
+      process.env.CALENDLY_JORGE_CHENARD,
+      process.env.CALENDLY_BRAYAN_ROMERO,
     ].filter(Boolean),
   },
   supabase: {

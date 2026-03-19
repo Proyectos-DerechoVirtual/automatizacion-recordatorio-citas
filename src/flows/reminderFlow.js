@@ -1,6 +1,6 @@
 const calendly = require('../services/calendly');
 const supabase = require('../services/supabase');
-const whatsapp = require('../services/whatsapp');
+const whatsappService = require('../services/whatsapp');
 const {
   extraerPrimerNombre,
   calcularFechaFinalCita,
@@ -94,7 +94,7 @@ function determinarRecordatorio(cita) {
   const producto = cita.producto || '';
 
   if (citaTemprana) {
-    // Citas tempranas: solo recordatorios de 3h (como primer contacto) y 1h
+    // Citas tempranas (antes de 11:00): solo 3h (como primer contacto) y 1h
     if (horasRestantes >= 2.9 && horasRestantes <= 3) {
       if (yaEnviado(tipo_recordatorio, 'recordatorio3h')) return null;
       return {
@@ -111,7 +111,7 @@ function determinarRecordatorio(cita) {
       };
     }
   } else {
-    // Citas normales: recordatorios de 5h, 3h y 1h
+    // Citas normales: 5h, 3h y 1h
     if (horasRestantes >= 4.9 && horasRestantes <= 5) {
       if (yaEnviado(tipo_recordatorio, 'recordatorio5h')) return null;
       return {
@@ -158,8 +158,8 @@ async function ejecutar() {
   console.log('[ReminderFlow] Iniciando...');
 
   try {
-    // 1. Obtener eventos de Calendly (todos los usuarios)
-    const eventos = await calendly.obtenerTodosLosEventos(12);
+    // 1. Obtener eventos de Calendly (todos los usuarios configurados)
+    const eventos = await calendly.obtenerTodosLosEventos();
     console.log(`[ReminderFlow] ${eventos.length} eventos obtenidos de Calendly`);
 
     if (eventos.length === 0) return;
@@ -187,7 +187,7 @@ async function ejecutar() {
 
     console.log(`[ReminderFlow] ${citasFormateadas.length} citas dentro de 5h`);
 
-    // 5. Upsert citas a Supabase
+    // 5. Upsert citas a Supabase (sin sobrescribir respuesta_usuario ni tipo_recordatorio)
     for (const cita of citasFormateadas) {
       await supabase.upsertCita({
         fecha_cita: cita.fecha_cita,
@@ -203,8 +203,6 @@ async function ejecutar() {
         horasRestantes: cita.horasRestantes,
         estado_evento: cita.estado_evento,
         estado_invitado: cita.estado_invitado,
-        respuesta_usuario: cita.respuesta_usuario,
-        tipo_recordatorio: cita.tipo_recordatorio,
       });
     }
 
@@ -217,7 +215,7 @@ async function ejecutar() {
         console.log(
           `[ReminderFlow] Enviando ${recordatorio.tipo} a ${cita.primer_nombre} (${cita.whatsapp})`
         );
-        await whatsapp.enviarMensaje(cita.whatsapp, recordatorio.plantilla);
+        await whatsappService.enviarMensaje(cita.whatsapp, recordatorio.plantilla);
 
         // Actualizar tipo de recordatorio en Supabase
         await supabase.upsertCita({
@@ -250,13 +248,13 @@ async function ejecutar() {
 
       // Notificar admin
       const horaCitaCorta = cita.hora_cita ? cita.hora_cita.slice(0, 5) : '';
-      await whatsapp.enviarMensaje(
+      await whatsappService.enviarMensaje(
         config.admin.group,
         msgAutocanceladoAdmin(cita.primer_nombre, horaCitaCorta)
       );
 
       // Notificar usuario
-      await whatsapp.enviarMensaje(
+      await whatsappService.enviarMensaje(
         cita.whatsapp,
         msgAutocanceladoUsuario(horaCitaCorta)
       );

@@ -1,35 +1,37 @@
 require('dotenv').config();
 
+const env = (key) => (process.env[key] || '').trim();
+
 const config = {
   baileys: {
-    url: process.env.BAILEYS_URL,
-    secret: process.env.BAILEYS_SECRET,
+    url: env('BAILEYS_URL'),
+    secret: env('BAILEYS_SECRET'),
   },
   calendly: {
-    token: process.env.CALENDLY_TOKEN,
-    org: process.env.CALENDLY_ORG,
+    token: env('CALENDLY_TOKEN'),
+    org: env('CALENDLY_ORG'),
     users: [
-      process.env.CALENDLY_DERECHO_VIRTUAL_1,
-      process.env.CALENDLY_DERECHO_VIRTUAL_2,
-      process.env.CALENDLY_LUCIA_VERGARA,
-      process.env.CALENDLY_JORGE_CHENARD,
-      process.env.CALENDLY_BRAYAN_ROMERO,
+      env('CALENDLY_DERECHO_VIRTUAL_1'),
+      env('CALENDLY_DERECHO_VIRTUAL_2'),
+      env('CALENDLY_LUCIA_VERGARA'),
+      env('CALENDLY_JORGE_CHENARD'),
+      env('CALENDLY_BRAYAN_ROMERO'),
     ].filter(Boolean),
   },
   supabase: {
-    url: process.env.SUPABASE_URL,
-    serviceKey: process.env.SUPABASE_SERVICE_KEY,
+    url: env('SUPABASE_URL'),
+    serviceKey: env('SUPABASE_SERVICE_KEY'),
   },
   gemini: {
-    apiKey: process.env.GEMINI_API_KEY,
-    model: 'gemini-2.0-flash-exp',
+    apiKey: env('GEMINI_API_KEY'),
+    model: 'gemini-3-flash-preview',
   },
   admin: {
-    group: process.env.ADMIN_GROUP,
-    groupAgendadas: process.env.ADMIN_GROUP_AGENDADAS,
-    agentNumber: process.env.AGENT_NUMBER,
+    group: env('ADMIN_GROUP'),
+    groupAgendadas: env('ADMIN_GROUP_AGENDADAS'),
+    agentNumber: env('AGENT_NUMBER'),
   },
-  dryRun: process.env.DRY_RUN === 'true',
+  dryRun: env('DRY_RUN') === 'true',
 };
 
 module.exports = config;

@@ -1,6 +1,6 @@
 const calendly = require('../services/calendly');
 const supabase = require('../services/supabase');
-const whatsapp = require('../services/whatsapp');
+const whatsappService = require('../services/whatsapp');
 const {
   extraerPrimerNombre,
   calcularFechaFinalCita,
@@ -21,10 +21,7 @@ async function ejecutar() {
 
   try {
     // 1. Obtener eventos de Calendly (user 1, count=100)
-    const eventos = await calendly.obtenerEventos(
-      config.calendly.users[0],
-      100
-    );
+    const eventos = await calendly.obtenerTodosLosEventos();
     console.log(`[NewAppointmentFlow] ${eventos.length} eventos obtenidos`);
 
     if (eventos.length === 0) return;
@@ -81,7 +78,7 @@ async function ejecutar() {
         `[NewAppointmentFlow] Nueva cita: ${primerNombre} - ${evento.name} - ${horaCitaCorta}`
       );
 
-      await whatsapp.enviarMensaje(
+      await whatsappService.enviarMensaje(
         config.admin.groupAgendadas,
         msgCitaAgendadaAdmin(
           primerNombre,

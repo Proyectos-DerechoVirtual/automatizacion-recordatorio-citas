@@ -1,8 +1,7 @@
 const supabase = require('../services/supabase');
-const whatsapp = require('../services/whatsapp');
+const whatsappService = require('../services/whatsapp');
 const calendly = require('../services/calendly');
 const gemini = require('../services/gemini');
-const { obtenerNumeroWhatsApp } = require('../utils/whatsapp');
 const {
   ENLACES_CALENDLY,
   msgConfirmacionAdmin,
@@ -15,43 +14,36 @@ const {
 const config = require('../config');
 
 /**
- * Filtrar solo mensajes de chat válidos.
+ * Filtrar solo mensajes de texto válidos.
+ * Baileys usa type:"text", UltraMsg usaba type:"chat".
  */
 function filtrarMensajesChat(conversaciones) {
   return conversaciones.filter(
-    (msg) => msg.type === 'chat' && msg.body && msg.body.trim() !== ''
+    (msg) => (msg.type === 'text' || msg.type === 'chat') && msg.body && msg.body.trim() !== ''
   );
 }
 
 /**
  * Determinar si el agente ya respondió al último mensaje del cliente.
+ * Con Baileys, los mensajes ya vienen filtrados por chat, no necesitamos filtrar por from/to.
  */
-function agenteYaRespondio(numeroWhatsapp, conversaciones) {
-  const numFmt = obtenerNumeroWhatsApp(numeroWhatsapp);
-
-  const msgs = filtrarMensajesChat(
-    conversaciones.filter((m) => m.from === numFmt || m.to === numFmt)
-  );
-
-  if (msgs.length === 0) return null; // sin coincidencia
+function agenteYaRespondio(conversaciones) {
+  const msgs = filtrarMensajesChat(conversaciones);
+  if (msgs.length === 0) return null;
 
   msgs.sort((a, b) => b.timestamp - a.timestamp);
   return msgs[0].fromMe;
 }
 
 /**
- * Obtener conversaciones de un número y formatearlas.
+ * Formatear conversaciones para el prompt de Gemini.
  */
-function obtenerYFormatearConversaciones(numeroWhatsapp, conversaciones) {
-  const numFmt = obtenerNumeroWhatsApp(numeroWhatsapp);
+function formatearConversaciones(conversaciones) {
+  const msgs = filtrarMensajesChat(conversaciones).sort((a, b) => a.timestamp - b.timestamp);
 
-  const msgs = filtrarMensajesChat(
-    conversaciones.filter((m) => m.from === numFmt || m.to === numFmt)
-  ).sort((a, b) => a.timestamp - b.timestamp);
+  if (msgs.length === 0) return 'No hay mensajes disponibles';
 
-  if (msgs.length === 0) return { mensajes: [], formateados: 'No hay mensajes disponibles' };
-
-  const formateados = msgs
+  return msgs
     .map((msg, i) => {
       const quien = msg.fromMe ? 'AGENTE' : 'CLIENTE';
       const fecha = new Date(msg.timestamp * 1000).toLocaleString('es-ES', {
@@ -64,8 +56,6 @@ function obtenerYFormatearConversaciones(numeroWhatsapp, conversaciones) {
       return `${i + 1}. [${fecha}] ${quien}: ${msg.body}`;
     })
     .join('\n\n');
-
-  return { mensajes: msgs, formateados };
 }
 
 /**
@@ -86,19 +76,16 @@ async function ejecutar() {
       if (!cita.whatsapp) continue;
 
       const chatId = `${cita.whatsapp}@s.whatsapp.net`;
-      const conversaciones = await whatsapp.obtenerChat(chatId, 2);
+      const conversaciones = await whatsappService.obtenerChat(chatId, 50);
 
       if (!Array.isArray(conversaciones) || conversaciones.length === 0) continue;
 
       // 3. Verificar si el agente ya respondió
-      const yaRespondio = agenteYaRespondio(cita.whatsapp, conversaciones);
+      const yaRespondio = agenteYaRespondio(conversaciones);
       if (yaRespondio === null || yaRespondio === true) continue;
 
       // 4. Obtener conversaciones formateadas
-      const { formateados } = obtenerYFormatearConversaciones(
-        cita.whatsapp,
-        conversaciones
-      );
+      const formateados = formatearConversaciones(conversaciones);
 
       const enlaceCalendly = ENLACES_CALENDLY[cita.producto] || 'No disponible';
       const horaCitaCorta = cita.hora_cita ? cita.hora_cita.slice(0, 5) : '';
@@ -142,7 +129,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
   switch (clasificacion) {
     case 'confirmado':
       // Notificar admin
-      await whatsapp.enviarMensaje(
+      await whatsappService.enviarMensaje(
         adminGroup,
         msgConfirmacionAdmin(
           cita.primer_nombre,
@@ -153,7 +140,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
         )
       );
       // Confirmar al cliente
-      await whatsapp.enviarMensaje(cita.whatsapp, respuesta_agente);
+      await whatsappService.enviarMensaje(cita.whatsapp, respuesta_agente);
       // Actualizar Supabase
       await supabase.actualizarCita(cita.citaId, { respuesta_usuario: 'confirmado' });
       break;
@@ -162,7 +149,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
       // Cancelar en Calendly
       await calendly.cancelarEvento(cita.citaId);
       // Notificar admin
-      await whatsapp.enviarMensaje(
+      await whatsappService.enviarMensaje(
         adminGroup,
         msgCancelacionAdmin(
           cita.primer_nombre,
@@ -173,7 +160,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
         )
       );
       // Notificar cliente
-      await whatsapp.enviarMensaje(
+      await whatsappService.enviarMensaje(
         cita.whatsapp,
         msgCancelacionCliente(cita.primer_nombre, enlaceCalendly)
       );
@@ -192,12 +179,12 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
         'Reprogramación solicitada via WhatsApp'
       );
       // Enviar link para reprogramar al cliente
-      await whatsapp.enviarMensaje(
+      await whatsappService.enviarMensaje(
         cita.whatsapp,
         msgReprogramarCliente(cita.primer_nombre, enlaceCalendly)
       );
       // Notificar admin
-      await whatsapp.enviarMensaje(
+      await whatsappService.enviarMensaje(
         adminGroup,
         msgReprogramarAdmin(
           cita.primer_nombre,
@@ -217,9 +204,9 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
 
     case 'cuestionamiento':
       // Enviar mensaje de espera al usuario
-      await whatsapp.enviarMensaje(cita.whatsapp, respuesta_agente);
+      await whatsappService.enviarMensaje(cita.whatsapp, respuesta_agente);
       // Notificar admin
-      await whatsapp.enviarMensaje(
+      await whatsappService.enviarMensaje(
         adminGroup,
         msgPreguntaAdmin(cita.primer_nombre, cita.whatsapp, cita.producto)
       );
@@ -230,7 +217,7 @@ async function ejecutarAccion(resultado, cita, enlaceCalendly, horaCitaCorta) {
     case 'discutido':
     default:
       // Respuesta no clara -> enviar respuesta del agente
-      await whatsapp.enviarMensaje(cita.whatsapp, respuesta_agente);
+      await whatsappService.enviarMensaje(cita.whatsapp, respuesta_agente);
       // Actualizar Supabase
       await supabase.actualizarCita(cita.citaId, { respuesta_usuario: 'discutido' });
       break;

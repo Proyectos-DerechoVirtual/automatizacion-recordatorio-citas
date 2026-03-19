@@ -2,7 +2,7 @@
 
 Sistema automatizado que gestiona el ciclo de vida completo de citas agendadas en Calendly: envía recordatorios por WhatsApp, clasifica las respuestas de los clientes con IA y ejecuta acciones según la intención detectada (confirmar, cancelar, reprogramar, etc.).
 
-Desplegado como funciones serverless en **Vercel**, disparado cada 2 minutos por un cron externo en **cron-job.org**.
+Desplegado como funciones serverless en **Vercel** con cron nativo cada 2 minutos.
 
 ## Qué hace exactamente
 
@@ -10,11 +10,11 @@ El sistema ejecuta **3 flujos** en cada ciclo (cada 2 minutos):
 
 ### Flujo 1 — Recordatorios y auto-cancelación (`reminderFlow`)
 
-1. Obtiene los eventos programados de **3 usuarios de Calendly** (con sus invitados).
+1. Obtiene los eventos programados de los **usuarios configurados de Calendly** (con sus invitados).
 2. Cruza esos eventos con los datos existentes en **Supabase** (tabla `citas`).
 3. Filtra las citas que están a menos de 5 horas de comenzar.
 4. Hace **upsert** de cada cita en Supabase (crea o actualiza).
-5. Envía **recordatorios por WhatsApp** (vía UltraMsg) según el tiempo restante:
+5. Envía **recordatorios por WhatsApp** (vía Baileys) según el tiempo restante:
    - **5 horas antes** — primer contacto con enlace de Zoom y solicitud de confirmación (solo citas de 11:00 en adelante).
    - **3 horas antes** — segundo recordatorio pidiendo confirmación (para citas tempranas, este es el primer contacto).
    - **1 hora antes** — último aviso, advirtiendo que se cancelará en 45 min sin confirmación.
@@ -30,12 +30,12 @@ El sistema ejecuta **3 flujos** en cada ciclo (cada 2 minutos):
 ### Flujo 2 — Clasificación de respuestas con IA (`classificationFlow`)
 
 1. Consulta en Supabase las citas cercanas (0-5h) que tienen recordatorio enviado pero **sin respuesta procesada** (o con respuesta "discutido").
-2. Para cada cita, obtiene los **últimos mensajes del chat de WhatsApp** vía UltraMsg.
+2. Para cada cita, obtiene los **últimos mensajes del chat de WhatsApp** vía Baileys.
 3. Verifica si el agente ya respondió al último mensaje del cliente. Si ya respondió, no procesa.
-4. Envía la conversación a **Google Gemini** (modelo `gemini-2.0-flash-exp`) con un prompt que incluye:
+4. Envía la conversación a **Google Gemini** (modelo `gemini-3-flash-preview`) con un prompt que incluye:
    - Datos de la cita (nombre, hora, producto, enlaces).
    - Los mensajes recientes del chat.
-   - Ejemplos de clasificación sacados de una base de datos de entrenamiento (equivalente al Google Sheets del workflow original).
+   - Ejemplos de clasificación sacados de una base de datos de entrenamiento.
 5. Gemini clasifica la respuesta en una de 5 categorías y genera una respuesta como agente humano:
    - **confirmado** — El cliente confirma asistencia → notifica al admin, envía confirmación al cliente, actualiza Supabase.
    - **cancelado** — El cliente no puede/quiere asistir → cancela en Calendly, notifica admin, envía link de reagendamiento al cliente, actualiza Supabase.
@@ -45,7 +45,7 @@ El sistema ejecuta **3 flujos** en cada ciclo (cada 2 minutos):
 
 ### Flujo 3 — Notificación de nuevas citas (`newAppointmentFlow`)
 
-1. Obtiene **todos los eventos** del usuario principal de Calendly (hasta 100).
+1. Obtiene los eventos de todos los usuarios configurados de Calendly.
 2. Los cruza con Supabase para detectar cuáles son **nuevos** (no tienen `aviso_cita_programada: "enviado"`).
 3. Para cada cita nueva (no cancelada):
    - Envía una **notificación al grupo de admin** con los datos del cliente (nombre, WhatsApp, hora, fecha, email, producto).
@@ -55,26 +55,35 @@ El sistema ejecuta **3 flujos** en cada ciclo (cada 2 minutos):
 
 | Servicio | Uso |
 |---|---|
-| **Vercel** | Hosting serverless (funciones en `/api`) |
-| **cron-job.org** | Cron externo cada 2 min que llama a `/api/cron` |
+| **Vercel** | Hosting serverless (funciones en `/api`) + cron nativo cada 2 min |
 | **Calendly API** | Obtener eventos, invitados, cancelar citas |
 | **Supabase** (self-hosted) | Base de datos PostgreSQL — tabla `citas` |
-| **UltraMsg** | Enviar/recibir mensajes de WhatsApp |
-| **Google Gemini** | Clasificación de respuestas con IA |
+| **Baileys** (WhatsApp Web API) | Enviar/recibir mensajes de WhatsApp via servicio propio en VPS |
+| **Google Gemini** | Clasificación de respuestas con IA (modelo `gemini-3-flash-preview`) |
+
+## WhatsApp via Baileys
+
+En lugar de usar un servicio de terceros como UltraMsg, los mensajes de WhatsApp se envían y reciben a través de un **servicio propio de Baileys** corriendo en una VPS con PM2.
+
+- **Proceso PM2:** `baileys-jorge`
+- **API REST:** enviar mensajes (`POST /messages/send`), leer chats (`GET /messages/chat`)
+- **Autenticación:** header `x-api-secret`
+- **Nota:** WhatsApp usa LIDs (Linked IDs) para mensajes entrantes. El servicio combina mensajes de `@s.whatsapp.net` y `@lid` automáticamente.
 
 ## Estructura del proyecto
 
 ```
 ├── api/
 │   ├── cron.js              # Endpoint principal (ejecuta los 3 flujos)
-│   └── health.js            # Health check
+│   ├── health.js            # Health check
+│   └── debug.js             # Debug de conectividad (protegido)
 ├── src/
 │   ├── index.js             # Script local para testing manual
-│   ├── config.js            # Configuración desde variables de entorno
+│   ├── config.js            # Configuración desde variables de entorno (con trim automático)
 │   ├── services/
-│   │   ├── calendly.js      # API Calendly
+│   │   ├── calendly.js      # API Calendly (por usuario + organización)
 │   │   ├── supabase.js      # API Supabase (REST)
-│   │   ├── ultramsg.js      # API UltraMsg (WhatsApp)
+│   │   ├── whatsapp.js      # API Baileys (enviar/leer mensajes)
 │   │   └── gemini.js        # API Google Gemini (clasificación IA)
 │   ├── flows/
 │   │   ├── reminderFlow.js       # Flujo 1: recordatorios + auto-cancelación
@@ -84,7 +93,8 @@ El sistema ejecuta **3 flujos** en cada ciclo (cada 2 minutos):
 │       ├── templates.js     # Plantillas de mensajes + ejemplos de clasificación
 │       ├── whatsapp.js      # Normalización de números WhatsApp
 │       └── helpers.js       # Utilidades de fecha/hora
-├── vercel.json              # Config Vercel (maxDuration: 60s)
+├── vercel.json              # Config Vercel (cron cada 2 min, maxDuration: 60s)
+├── .vercelignore            # Excluye .env del deploy
 ├── .env.example             # Template de variables de entorno
 └── .gitignore
 ```
@@ -93,20 +103,32 @@ El sistema ejecuta **3 flujos** en cada ciclo (cada 2 minutos):
 
 | Endpoint | Método | Protección | Descripción |
 |---|---|---|---|
-| `/api/cron` | GET | Header `x-cron-secret` o query `?secret=` | Ejecuta los 3 flujos |
+| `/api/cron` | GET | `Authorization: Bearer <CRON_SECRET>` | Ejecuta los 3 flujos |
+| `/api/cron?verbose=true` | GET | Misma | Ejecuta y devuelve logs detallados |
 | `/api/health` | GET | Ninguna | Health check |
+| `/api/debug` | GET | `Authorization: Bearer <CRON_SECRET>` | Test de conectividad a servicios |
 
 ## Variables de entorno
 
 Ver `.env.example` para la lista completa. Todas las credenciales se manejan exclusivamente vía variables de entorno.
 
-## Cron externo
+**Importante:** El archivo `.env` local NO se sube a Vercel (excluido via `.vercelignore`). Las env vars de producción se gestionan con `vercel env add`.
 
-Configurado en [cron-job.org](https://cron-job.org):
+## Cron
 
-- **URL:** `https://automatizacion-recordatorio-citas.vercel.app/api/cron`
-- **Frecuencia:** cada 2 minutos (`*/2 * * * *`)
-- **Header:** `x-cron-secret: <valor de CRON_SECRET>`
+Configurado como **Vercel Cron** nativo en `vercel.json`:
+
+```json
+{
+  "crons": [{ "path": "/api/cron", "schedule": "*/2 * * * *" }]
+}
+```
+
+Vercel envía automáticamente el header `Authorization: Bearer <CRON_SECRET>` en cada ejecución.
+
+## Modo DRY_RUN
+
+Con `DRY_RUN=true` el sistema ejecuta toda la lógica pero **no envía mensajes de WhatsApp ni cancela citas en Calendly**. Útil para verificar que no haya spam antes de activar producción.
 
 ## Desarrollo local
 

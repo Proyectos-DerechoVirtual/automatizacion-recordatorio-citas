@@ -10,7 +10,7 @@ const HEADERS = {
  * @param {string} userUri - URI del usuario Calendly
  * @param {number} count - Número máximo de eventos
  */
-async function obtenerEventos(userUri, count = 12) {
+async function obtenerEventos(userUri, count = 100) {
   const minStartTime = new Date(Date.now() - 15 * 60 * 1000).toISOString();
   const params = new URLSearchParams({
     user: userUri,
@@ -36,7 +36,7 @@ async function obtenerEventos(userUri, count = 12) {
 /**
  * Obtener eventos de todos los usuarios configurados.
  */
-async function obtenerTodosLosEventos(count = 12) {
+async function obtenerTodosLosEventos(count = 100) {
   const results = await Promise.all(
     config.calendly.users.map((u) => obtenerEventos(u, count))
   );
